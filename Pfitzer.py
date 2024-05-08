@@ -60,7 +60,27 @@ A = [
 ### OBECNE LOKALIZACJE SIEDZIB
 L = [4, 14, 16, 22]
 
+# Inicjalizacja modelu
+model = LpProblem("Pfitzer Problem", LpMinimize)
 
-### OBLICZENIA
+# Definicja zmiennych decyzyjnych
+x = LpVariable.dicts('x', [(i, j) for i in range(len(A)) for j in range(len(A[0]))], cat='Binary')
 
-### TODO
+# Funkcja celu - minimalizacja odległości
+model += lpSum(D[i][j] * x[(i, j)] for i in range(len(A)) for j in range(len(A[0])))
+
+# Ograniczenia
+for j in range(len(A[0])):
+    model += lpSum(x[(i, j)] for i in range(len(A))) == 1  # Każdy region ma być przypisany dokładnie jednemu przedstawicielowi
+
+for i in range(len(A)):
+    model += lpSum(x[(i, j)] * P[i] for j in range(len(A[0]))) >= 0.9  # Suma pracochłonności przydzielonych regionów >= 0.9
+    model += lpSum(x[(i, j)] * P[i] for j in range(len(A[0]))) <= 1.1  # Suma pracochłonności przydzielonych regionów <= 1.1
+
+# Parametr epsilon
+epsilon = 0.01
+
+# Ograniczenia do epsilon
+# Jakieś ograniczena
+
+model.solve()
