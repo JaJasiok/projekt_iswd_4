@@ -1,5 +1,6 @@
 from pulp import *
 import matplotlib.pyplot as plt
+import itertools
 
 ### macierz odleglosci
 D = [
@@ -60,27 +61,82 @@ A = [
 ### OBECNE LOKALIZACJE SIEDZIB
 L = [4, 14, 16, 22]
 
+epsilons = [i for i in range(0,101,1)] #sprawdzany zakres epsilon dla f2
+solutions = set()
 # Inicjalizacja modelu
-model = LpProblem("Pfitzer Problem", LpMinimize)
+for epsilon in epsilons:
+    model = LpProblem("Pfitzer Problem", LpMinimize)
 
-# Definicja zmiennych decyzyjnych
-x = LpVariable.dicts('x', [(i, j) for i in range(len(A)) for j in range(len(A[0]))], cat='Binary')
+    # Definicja zmiennych decyzyjnych
+    x = LpVariable.dicts('x', [(i, j) for i in range(len(A)) for j in range(len(A[0]))], cat=LpBinary)
 
-# Funkcja celu - minimalizacja odległości
-model += lpSum(D[i][j] * x[(i, j)] for i in range(len(A)) for j in range(len(A[0])))
+    # f1
+    model += lpSum(D[i][j] * x[(i, j)] for i in range(len(A)) for j in range(len(A[0])))
 
-# Ograniczenia
-for j in range(len(A[0])):
-    model += lpSum(x[(i, j)] for i in range(len(A))) == 1  # Każdy region ma być przypisany dokładnie jednemu przedstawicielowi
+    # f2 - ograniczone przez epsilon
+    model += lpSum(x[(i, j)] * (1 - A[i][j]) * P[i] / sum(P) for i in range(len(A)) for j in range(len(A[0]))) <= epsilon
 
-for i in range(len(A)):
-    model += lpSum(x[(i, j)] * P[i] for j in range(len(A[0]))) >= 0.9  # Suma pracochłonności przydzielonych regionów >= 0.9
-    model += lpSum(x[(i, j)] * P[i] for j in range(len(A[0]))) <= 1.1  # Suma pracochłonności przydzielonych regionów <= 1.1
 
-# Parametr epsilon
-epsilon = 0.01
+    # Ograniczenia
+    for i in range(len(A)):
+        model += lpSum(x[(i, j)] for j in range(len(A[0]))) == 1  # Każdy region ma być przypisany dokładnie jednemu przedstawicielowi
 
-# Ograniczenia do epsilon
-# Jakieś ograniczena
+    for j in range(len(A[0])):
+        model += lpSum(x[(i, j)] * P[i] for i in range(len(A))) >= 0.9  # Suma pracochłonności przydzielonych regionów >= 0.9
+        model += lpSum(x[(i, j)] * P[i] for i in range(len(A))) <= 1.1  # Suma pracochłonności przydzielonych regionów <= 1.1
+    
+    model.solve()
 
-model.solve()
+    solutions.add((value(model.objective),sum(x[(i, j)].value() * (1 - A[i][j]) * P[i] / sum(P) for i in range(len(A)) for j in range(len(A[0])))))
+
+epsilons = [i for i in range(0,201,7)] #sprawdzany zakres epsilon dla f1
+for epsilon in epsilons:
+    model = LpProblem("Pfitzer Problem", LpMinimize)
+
+    # Definicja zmiennych decyzyjnych
+    x = LpVariable.dicts('x', [(i, j) for i in range(len(A)) for j in range(len(A[0]))], cat=LpBinary)
+
+    # f1 - ograniczone przez epsilon
+    model += lpSum(D[i][j] * x[(i, j)] for i in range(len(A)) for j in range(len(A[0]))) <= epsilon
+
+    # f2 
+    model += lpSum(x[(i, j)] * (1 - A[i][j]) * P[i] / sum(P) for i in range(len(A)) for j in range(len(A[0])))
+
+    # Ograniczenia
+    for i in range(len(A)):
+        model += lpSum(x[(i, j)] for j in range(len(A[0]))) == 1  # Każdy region ma być przypisany dokładnie jednemu przedstawicielowi
+
+    for j in range(len(A[0])):
+        model += lpSum(x[(i, j)] * P[i] for i in range(len(A))) >= 0.9  # Suma pracochłonności przydzielonych regionów >= 0.9
+        model += lpSum(x[(i, j)] * P[i] for i in range(len(A))) <= 1.1  # Suma pracochłonności przydzielonych regionów <= 1.1
+    
+    model.solve()
+
+    solutions.add((sum(D[i][j] * x[(i, j)].value() for i in range(len(A)) for j in range(len(A[0]))),value(model.objective)))
+
+#usun zdominowane rozwiazania
+found = True
+while found:
+    found = False
+    for i, val in enumerate(itertools.islice(solutions, len(solutions))):
+        for ii, val2 in enumerate(itertools.islice(solutions, len(solutions))):
+            if i == ii:
+                continue
+            if val[0] > val2[0] and val[1] > val2[1]:
+                found = True
+                solutions.remove(val)
+                break
+        if found:
+            break
+
+
+#wyswietl 10 rozwiazan
+xpoints = []
+ypoints = []
+plt.plot()
+for i, val in enumerate(itertools.islice(solutions, 10)):
+    xpoints.append(val[0])
+    ypoints.append(val[1])
+
+plt.plot(xpoints, ypoints, 'o')
+plt.show()
